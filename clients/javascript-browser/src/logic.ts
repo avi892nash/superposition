@@ -25,25 +25,28 @@ function applyLogic(
     context: JsonMap,
     partial: boolean
 ): boolean {
-    for (const [dimension, value] of Object.entries(condition)) {
-        if (dimension in context) {
-            const contextValue = context[dimension];
+    for (const dimension in condition) {
+        if (condition.hasOwnProperty(dimension)) {
+            const value = condition[dimension];
+            if (dimension in context) {
+                const contextValue = context[dimension];
 
-            if (dimension === "variantIds") {
-                if (Array.isArray(contextValue)) {
-                    if (!contextValue.includes(value)) {
+                if (dimension === "variantIds") {
+                    if (Array.isArray(contextValue)) {
+                        if (contextValue.indexOf(value) === -1) {
+                            return false;
+                        }
+                    } else {
                         return false;
                     }
-                } else {
+                } else if (!deepEqual(contextValue, value)) {
                     return false;
                 }
-            } else if (!deepEqual(contextValue, value)) {
+            } else if (partial) {
+                continue;
+            } else {
                 return false;
             }
-        } else if (partial) {
-            continue;
-        } else {
-            return false;
         }
     }
     return true;

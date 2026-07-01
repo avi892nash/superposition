@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use actix_web::web::{Data, Json};
 use chrono::{DateTime, Utc};
@@ -25,7 +25,7 @@ use superposition_types::{
             ChangeReason, Description,
             experimentation::{
                 Bucket, Buckets, Experiment, ExperimentGroup, ExperimentStatusType,
-                GroupType, TrafficPercentage,
+                ExperimentType, GroupType, TrafficPercentage, VariantType,
             },
         },
         schema::{
@@ -135,6 +135,18 @@ pub fn add_members(
         ));
     }
 
+    // RELEASE experiments allocate all 100 buckets (control absorbs the
+    // remainder), so they cannot share a user-created group with other members.
+    // They run in their own system-generated group created at ramp time.
+    if member_experiments
+        .iter()
+        .any(|exp| exp.experiment_type == ExperimentType::Release)
+    {
+        return Err(bad_argument!(
+            "RELEASE experiments cannot be added to a user-created experiment group; they run in their own system-generated group."
+        ));
+    }
+
     req.member_experiment_ids = validate_experiment_group_constraints(
         member_experiments,
         &experiment_group.member_experiment_ids,
@@ -197,11 +209,7 @@ pub fn remove_members(
 
     let mut buckets = experiment_group.buckets;
     for member_experiment in &experiments_to_remove {
-        update_bucket_allocation(
-            member_experiment,
-            &mut buckets,
-            &TrafficPercentage::default(),
-        )?;
+        free_experiment_buckets(member_experiment, &mut buckets);
     }
 
     let updated_group = diesel::update(experiment_groups::experiment_groups)
@@ -218,90 +226,175 @@ pub fn remove_members(
     Ok(Json(updated_group))
 }
 
+/// Per-variant bucket targets (out of 100) for an experiment, derived from its
+/// type. The sum of the targets is the number of buckets that will be assigned.
+///
+/// - `Release`: the control variant absorbs the remaining `100 - X`%, and the
+///   `X`% is split equally across the experimental variants (the `X % E`
+///   remainder going to the first experimental variants). The targets always
+///   sum to 100 — every matching request lands on a variant, no fall-through.
+/// - `Default` / `DeleteOverrides`: every variant gets `X` buckets; the
+///   remaining `100 - X * N` buckets stay unassigned and fall through to the
+///   base config (existing behaviour).
+fn variant_bucket_targets(
+    experiment: &Experiment,
+    exp_traffic_percentage: &TrafficPercentage,
+) -> Vec<(String, usize)> {
+    let x = **exp_traffic_percentage as usize;
+    match experiment.experiment_type {
+        ExperimentType::Release => {
+            let experimental_count = experiment
+                .variants
+                .iter()
+                .filter(|v| v.variant_type == VariantType::EXPERIMENTAL)
+                .count();
+            let (base, remainder) = if experimental_count == 0 {
+                (0, 0)
+            } else {
+                (x / experimental_count, x % experimental_count)
+            };
+            let mut experimental_idx = 0;
+            experiment
+                .variants
+                .iter()
+                .map(|variant| {
+                    let target = match variant.variant_type {
+                        VariantType::CONTROL => 100usize.saturating_sub(x),
+                        VariantType::EXPERIMENTAL => {
+                            let extra = usize::from(experimental_idx < remainder);
+                            experimental_idx += 1;
+                            base + extra
+                        }
+                    };
+                    (variant.id.clone(), target)
+                })
+                .collect()
+        }
+        ExperimentType::Default | ExperimentType::DeleteOverrides => experiment
+            .variants
+            .iter()
+            .map(|variant| (variant.id.clone(), x))
+            .collect(),
+    }
+}
+
 pub fn update_bucket_allocation(
     experiment: &Experiment,
     exp_group_buckets: &mut Buckets,
     exp_traffic_percentage: &TrafficPercentage,
 ) -> superposition::Result<()> {
-    let mut current_exp_buckets = vec![];
-    let mut unassigned_buckets = vec![];
-
-    // Separate current exp buckets and unassigned buckets
-    for bucket in exp_group_buckets.iter_mut() {
-        if let Some(buck) = bucket {
-            if experiment.variants.iter().any(|v| v.id == *buck.variant_id) {
-                current_exp_buckets.push(bucket);
-            }
-        } else {
-            unassigned_buckets.push(bucket);
-        }
-    }
-
-    let required_bucket_count =
-        **exp_traffic_percentage as usize * experiment.variants.len();
-    let current_bucket_count = current_exp_buckets.len();
-    let bucket_diff = required_bucket_count.abs_diff(current_bucket_count);
-
-    match required_bucket_count.cmp(&current_bucket_count) {
-        std::cmp::Ordering::Greater => {
-            assign_additional_buckets(&mut unassigned_buckets, experiment, bucket_diff)?;
-        }
-        std::cmp::Ordering::Less => {
-            unassign_excess_buckets(&mut current_exp_buckets, experiment, bucket_diff);
-        }
-        std::cmp::Ordering::Equal => (),
-    }
-
-    Ok(())
+    let targets = variant_bucket_targets(experiment, exp_traffic_percentage);
+    reconcile_buckets(experiment, exp_group_buckets, &targets)
 }
 
-fn assign_additional_buckets(
-    unassigned_buckets: &mut Vec<&mut Option<Bucket>>,
+/// Reconcile the group's buckets so each of the experiment's variants holds
+/// exactly its target number of buckets.
+///
+/// A single scalar diff cannot express RELEASE, where the control and
+/// experimental variants move in opposite directions as `X` changes (ramping up
+/// shrinks control and grows experimental). So we reconcile per variant and,
+/// crucially, free over-target variants *before* filling under-target ones —
+/// otherwise (RELEASE keeps all 100 slots filled) there would be no empty slot
+/// to grow into.
+fn reconcile_buckets(
     experiment: &Experiment,
-    additional_needed: usize,
+    exp_group_buckets: &mut Buckets,
+    targets: &[(String, usize)],
 ) -> superposition::Result<()> {
-    if additional_needed > unassigned_buckets.len() {
-        return Err(bad_argument!(
-            "Not enough empty buckets to accommodate the updated traffic percentage. Required additional: {}, Available: {}",
-            additional_needed,
-            unassigned_buckets.len()
-        ));
+    let experiment_id = experiment.id.to_string();
+    let target_ids: HashSet<&str> = targets.iter().map(|(id, _)| id.as_str()).collect();
+
+    // Free buckets belonging to this experiment but to variants that no longer
+    // exist on it (e.g. a variant was removed).
+    for bucket in exp_group_buckets.iter_mut() {
+        let stale = bucket.as_ref().is_some_and(|b| {
+            b.experiment_id == experiment_id
+                && !target_ids.contains(b.variant_id.as_str())
+        });
+        if stale {
+            *bucket = None;
+        }
     }
 
-    let variants_len = experiment.variants.len();
+    // Current bucket count held by each of this experiment's variants. Owns its
+    // keys so the immutable borrow of the buckets is released before we mutate.
+    let mut current_counts: HashMap<String, usize> = HashMap::new();
+    for b in exp_group_buckets.iter().flatten() {
+        if b.experiment_id == experiment_id {
+            *current_counts.entry(b.variant_id.clone()).or_insert(0) += 1;
+        }
+    }
 
-    // Reverse the unassigned_buckets to fill from the front
-    unassigned_buckets.reverse();
-
-    for variant in experiment.variants.iter() {
-        for _ in 0..additional_needed / variants_len {
-            if let Some(bucket) = unassigned_buckets.pop() {
-                *bucket = Some(Bucket {
-                    experiment_id: experiment.id.to_string(),
-                    variant_id: variant.id.clone(),
-                });
+    // Pass 1: free excess buckets from over-target variants back to the pool.
+    for (variant_id, target) in targets {
+        let current = current_counts
+            .get(variant_id.as_str())
+            .copied()
+            .unwrap_or(0);
+        let mut to_remove = current.saturating_sub(*target);
+        if to_remove == 0 {
+            continue;
+        }
+        for bucket in exp_group_buckets.iter_mut() {
+            if to_remove == 0 {
+                break;
             }
+            let matches = bucket.as_ref().is_some_and(|b| {
+                b.experiment_id == experiment_id && b.variant_id == *variant_id
+            });
+            if matches {
+                *bucket = None;
+                to_remove -= 1;
+            }
+        }
+    }
+
+    // Pass 2: fill under-target variants from the now-replenished empty pool.
+    for (variant_id, target) in targets {
+        let current = current_counts
+            .get(variant_id.as_str())
+            .copied()
+            .unwrap_or(0);
+        let mut to_add = target.saturating_sub(current);
+        if to_add == 0 {
+            continue;
+        }
+        for bucket in exp_group_buckets.iter_mut() {
+            if to_add == 0 {
+                break;
+            }
+            if bucket.is_none() {
+                *bucket = Some(Bucket {
+                    experiment_id: experiment_id.clone(),
+                    variant_id: variant_id.clone(),
+                });
+                to_add -= 1;
+            }
+        }
+        if to_add > 0 {
+            return Err(bad_argument!(
+                "Not enough empty buckets to accommodate the updated traffic percentage. Required additional: {} for variant {}",
+                to_add,
+                variant_id
+            ));
         }
     }
 
     Ok(())
 }
 
-fn unassign_excess_buckets(
-    current_buckets: &mut [&mut Option<Bucket>],
-    experiment: &Experiment,
-    excess_count: usize,
-) {
-    let variants_len = experiment.variants.len();
-    for variant in experiment.variants.iter() {
-        for _ in 0..excess_count / variants_len {
-            if let Some(bucket) = current_buckets
-                .iter_mut()
-                .rev()
-                .find(|b| b.as_ref().is_some_and(|b| *b.variant_id == *variant.id))
-            {
-                **bucket = None;
-            }
+/// Free every bucket held by an experiment, unconditionally. Used when detaching
+/// or removing an experiment from a group — unlike running the type-aware
+/// allocator at `X = 0` (which for RELEASE would keep the control variant's 100
+/// buckets), this always clears the experiment out entirely.
+pub fn free_experiment_buckets(experiment: &Experiment, exp_group_buckets: &mut Buckets) {
+    let experiment_id = experiment.id.to_string();
+    for bucket in exp_group_buckets.iter_mut() {
+        let owned = bucket
+            .as_ref()
+            .is_some_and(|b| b.experiment_id == experiment_id);
+        if owned {
+            *bucket = None;
         }
     }
 }
@@ -320,7 +413,7 @@ pub fn detach_experiment_from_group(
     )?;
 
     let mut buckets = experiment_group.buckets;
-    update_bucket_allocation(experiment, &mut buckets, &TrafficPercentage::default())?;
+    free_experiment_buckets(experiment, &mut buckets);
 
     let mut member_experiment_ids = experiment_group.member_experiment_ids;
     member_experiment_ids.retain(|&id| id != experiment.id);
@@ -366,7 +459,10 @@ pub fn create_system_generated_experiment_group(
     let now = chrono::Utc::now();
 
     let group_traffic_percentage = TrafficPercentage::try_from(
-        experiment.variants.len() as u8 * **exp_traffic_percentage,
+        experiment
+            .experiment_type
+            .total_traffic_percentage(**exp_traffic_percentage, experiment.variants.len())
+            as i32,
     )
     .map_err(|e| unexpected_error!(e))?;
 
@@ -418,7 +514,10 @@ pub fn update_experiment_group_buckets(
 
     let new_traffic_percentage = match experiment_group.group_type {
         GroupType::SystemGenerated => TrafficPercentage::try_from(
-            experiment.variants.len() as i32 * (**exp_traffic_percentage as i32),
+            experiment
+                .experiment_type
+                .total_traffic_percentage(**exp_traffic_percentage, experiment.variants.len())
+                as i32,
         )
         .map_err(|e| unexpected_error!(e))?,
         GroupType::UserCreated => experiment_group.traffic_percentage,

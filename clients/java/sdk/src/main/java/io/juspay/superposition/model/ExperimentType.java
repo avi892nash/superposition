@@ -18,10 +18,11 @@ public final class ExperimentType implements SerializableShape {
     public static final ShapeId $ID = ShapeId.from("io.superposition#ExperimentType");
     public static final ExperimentType DEFAULT = new ExperimentType(Type.DEFAULT, "DEFAULT");
     public static final ExperimentType DELETE_OVERRIDES = new ExperimentType(Type.DELETE_OVERRIDES, "DELETE_OVERRIDES");
-    private static final List<ExperimentType> $TYPES = List.of(DEFAULT, DELETE_OVERRIDES);
+    public static final ExperimentType RELEASE = new ExperimentType(Type.RELEASE, "RELEASE");
+    private static final List<ExperimentType> $TYPES = List.of(DEFAULT, DELETE_OVERRIDES, RELEASE);
 
     public static final Schema $SCHEMA = Schema.createEnum($ID,
-        Set.of(DEFAULT.value, DELETE_OVERRIDES.value)
+        Set.of(DEFAULT.value, DELETE_OVERRIDES.value, RELEASE.value)
     );
 
     private final String value;
@@ -38,7 +39,8 @@ public final class ExperimentType implements SerializableShape {
     public enum Type {
         $UNKNOWN,
         DEFAULT,
-        DELETE_OVERRIDES
+        DELETE_OVERRIDES,
+        RELEASE
     }
 
     /**
@@ -91,6 +93,7 @@ public final class ExperimentType implements SerializableShape {
         return switch (value) {
             case "DEFAULT" -> DEFAULT;
             case "DELETE_OVERRIDES" -> DELETE_OVERRIDES;
+            case "RELEASE" -> RELEASE;
             default -> throw new IllegalArgumentException("Unknown value: " + value);
         };
     }
@@ -142,6 +145,7 @@ public final class ExperimentType implements SerializableShape {
             return switch (value) {
                 case "DEFAULT" -> DEFAULT;
                 case "DELETE_OVERRIDES" -> DELETE_OVERRIDES;
+                case "RELEASE" -> RELEASE;
                 default -> new ExperimentType(Type.$UNKNOWN, value);
             };
         }

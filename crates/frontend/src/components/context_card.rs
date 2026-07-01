@@ -31,6 +31,7 @@ fn Option(
 #[component]
 fn ContextOptions(
     #[prop(into)] handle_create_experiment: Callback<(), ()>,
+    #[prop(into)] handle_release_experiment: Callback<(), ()>,
     #[prop(into)] handle_delete_experiment: Callback<(), ()>,
     #[prop(into)] handle_clone: Callback<(), ()>,
     #[prop(into)] handle_edit: Callback<(), ()>,
@@ -53,6 +54,11 @@ fn ContextOptions(
                     label="Update Overrides via Experiment".to_string()
                     icon="ri-test-tube-line".to_string()
                     on_click=handle_create_experiment
+                />
+                <Option
+                    label="Release Overrides via Experiment".to_string()
+                    icon="ri-rocket-line".to_string()
+                    on_click=handle_release_experiment
                 />
                 <Option
                     label="Delete Overrides via Experiment".to_string()
@@ -88,6 +94,7 @@ pub fn ContextCard(
     #[prop(default = true)] show_actions: bool,
     #[prop(into)] href: String,
     #[prop(into)] handle_create_experiment: Callback<String, ()>,
+    #[prop(into)] handle_release_experiment: Callback<String, ()>,
     #[prop(into)] handle_delete_experiment: Callback<String, ()>,
     #[prop(into)] handle_edit: Callback<String, ()>,
     #[prop(into)] handle_clone: Callback<String, ()>,
@@ -133,6 +140,9 @@ pub fn ContextCard(
                         <ContextOptions
                             handle_create_experiment=move |_| {
                                 handle_create_experiment.call(context.with_value(|c| c.id.clone()))
+                            }
+                            handle_release_experiment=move |_| {
+                                handle_release_experiment.call(context.with_value(|c| c.id.clone()))
                             }
                             handle_delete_experiment=move |_| {
                                 handle_delete_experiment.call(context.with_value(|c| c.id.clone()))

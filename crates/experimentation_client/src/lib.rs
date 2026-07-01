@@ -264,7 +264,11 @@ pub fn get_applicable_variants_from_group_response(
                 let valid_context = superposition_types::apply(&exp.context, context);
 
                 let res = valid_context
-                    && (*exp.traffic_percentage as usize * exp.variants.len()) >= *toss;
+                    && (exp
+                        .experiment_type
+                        .total_traffic_percentage(*exp.traffic_percentage, exp.variants.len())
+                        as usize)
+                        >= *toss;
 
                 res.then_some(bucket.variant_id.clone())
             })

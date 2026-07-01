@@ -14,6 +14,7 @@
 /// match experimenttype {
 ///     ExperimentType::Default => { /* ... */ },
 ///     ExperimentType::DeleteOverrides => { /* ... */ },
+///     ExperimentType::Release => { /* ... */ },
 ///     other @ _ if other.as_str() == "NewFeature" => { /* handles a case for `NewFeature` */ },
 ///     _ => { /* ... */ },
 /// }
@@ -44,6 +45,8 @@ pub enum ExperimentType {
     Default,
     #[allow(missing_docs)] // documentation missing in model
     DeleteOverrides,
+    #[allow(missing_docs)] // documentation missing in model
+    Release,
     /// `Unknown` contains new variants that have been added since this code was generated.
     #[deprecated(note = "Don't directly match on `Unknown`. See the docs on this enum for the correct way to handle unknown variants.")]
     Unknown(crate::primitives::sealed_enum_unknown::UnknownVariantValue)
@@ -53,6 +56,7 @@ impl ::std::convert::From<&str> for ExperimentType {
                         match s {
                             "DEFAULT" => ExperimentType::Default,
 "DELETE_OVERRIDES" => ExperimentType::DeleteOverrides,
+"RELEASE" => ExperimentType::Release,
 other => ExperimentType::Unknown(crate::primitives::sealed_enum_unknown::UnknownVariantValue(other.to_owned()))
                         }
                     }
@@ -70,12 +74,13 @@ impl ExperimentType {
                     match self {
     ExperimentType::Default => "DEFAULT",
     ExperimentType::DeleteOverrides => "DELETE_OVERRIDES",
+    ExperimentType::Release => "RELEASE",
     ExperimentType::Unknown(value) => value.as_str()
 }
                 }
                 /// Returns all the `&str` representations of the enum members.
                 pub const fn values() -> &'static [&'static str] {
-                    &["DEFAULT", "DELETE_OVERRIDES"]
+                    &["DEFAULT", "DELETE_OVERRIDES", "RELEASE"]
                 }
             }
 impl ::std::convert::AsRef<str> for ExperimentType {
@@ -100,6 +105,7 @@ impl ::std::fmt::Display for ExperimentType {
                             match self {
                                 ExperimentType::Default => write!(f, "DEFAULT"),
 ExperimentType::DeleteOverrides => write!(f, "DELETE_OVERRIDES"),
+ExperimentType::Release => write!(f, "RELEASE"),
 ExperimentType::Unknown(value) => write!(f, "{}", value)
                             }
                         }

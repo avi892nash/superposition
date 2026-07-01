@@ -347,6 +347,20 @@ fn AutofillExperimentForm(
                                     />
                                 }
                             }
+                            ExperimentType::Release => {
+                                let overrides = context.override_.into_iter().collect::<Vec<_>>();
+                                view! {
+                                    <ExperimentForm
+                                        experiment_form_type=ExperimentFormType::Release
+                                        context=condition
+                                        variants=VariantFormTs::default_with_overrides(overrides)
+                                        default_config=default_config.get_value()
+                                        dimensions=dimensions.get_value()
+                                        handle_submit
+                                        metrics=workspace_settings.with_value(|w| w.metrics.clone())
+                                    />
+                                }
+                            }
                             ExperimentType::DeleteOverrides => {
                                 view! {
                                     <ExperimentForm
@@ -469,6 +483,14 @@ pub fn ContextOverride() -> impl IntoView {
     let handle_delete_experiment = move |context_id| {
         set_form_mode.set(Some(FormMode::Experiment(
             ExperimentType::DeleteOverrides,
+            context_id,
+        )));
+        open_drawer("context_and_override_drawer");
+    };
+
+    let handle_release_experiment = move |context_id| {
+        set_form_mode.set(Some(FormMode::Experiment(
+            ExperimentType::Release,
             context_id,
         )));
         open_drawer("context_and_override_drawer");
@@ -654,6 +676,7 @@ pub fn ContextOverride() -> impl IntoView {
                                                             handle_clone=on_context_clone
                                                             handle_delete=on_context_delete
                                                             handle_delete_experiment
+                                                            handle_release_experiment
                                                         />
                                                     }
                                                 })
@@ -701,6 +724,9 @@ pub fn ContextOverride() -> impl IntoView {
                 let drawer_header = match form_mode.get() {
                     Some(FormMode::Experiment(ExperimentType::Default, _)) => {
                         "Update Override via Experiment"
+                    }
+                    Some(FormMode::Experiment(ExperimentType::Release, _)) => {
+                        "Release Override via Experiment"
                     }
                     Some(FormMode::Experiment(ExperimentType::DeleteOverrides, _)) => {
                         "Delete Override via Experiment"

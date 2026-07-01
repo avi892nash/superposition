@@ -64,6 +64,7 @@ list ExperimentStatusTypeList {
 enum ExperimentType {
     DEFAULT
     DELETE_OVERRIDES
+    RELEASE
 }
 
 enum VariantType {

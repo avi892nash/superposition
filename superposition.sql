@@ -106,6 +106,8 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
+ALTER TYPE public.experiment_type ADD VALUE IF NOT EXISTS 'RELEASE';
+
 ALTER TABLE superposition.workspaces add column if not exists config_version bigint;
 
 ALTER TABLE superposition.workspaces ADD COLUMN IF NOT EXISTS allow_experiment_self_approval boolean NOT NULL DEFAULT false;

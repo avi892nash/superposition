@@ -35,6 +35,7 @@ from .superposition_types import Config
 from .superposition_types import Context
 from .superposition_types import DimensionInfo
 from .superposition_types import ExperimentStatusType
+from .superposition_types import ExperimentType
 from .superposition_types import GroupType
 from .superposition_types import MergeStrategy
 from .superposition_types import Overrides
@@ -47,6 +48,7 @@ from .superposition_types import _UniffiConverterTypeConfig
 from .superposition_types import _UniffiConverterTypeContext
 from .superposition_types import _UniffiConverterTypeDimensionInfo
 from .superposition_types import _UniffiConverterTypeExperimentStatusType
+from .superposition_types import _UniffiConverterTypeExperimentType
 from .superposition_types import _UniffiConverterTypeGroupType
 from .superposition_types import _UniffiConverterTypeMergeStrategy
 from .superposition_types import _UniffiConverterTypeOverrides
@@ -59,6 +61,7 @@ from .superposition_types import _UniffiRustBuffer as _UniffiRustBufferConfig
 from .superposition_types import _UniffiRustBuffer as _UniffiRustBufferContext
 from .superposition_types import _UniffiRustBuffer as _UniffiRustBufferDimensionInfo
 from .superposition_types import _UniffiRustBuffer as _UniffiRustBufferExperimentStatusType
+from .superposition_types import _UniffiRustBuffer as _UniffiRustBufferExperimentType
 from .superposition_types import _UniffiRustBuffer as _UniffiRustBufferGroupType
 from .superposition_types import _UniffiRustBuffer as _UniffiRustBufferMergeStrategy
 from .superposition_types import _UniffiRustBuffer as _UniffiRustBufferOverrides
@@ -1210,15 +1213,21 @@ class FfiExperiment:
     variants: "Variants"
     context: "Condition"
     status: "ExperimentStatusType"
-    def __init__(self, *, id: "str", traffic_percentage: "int", variants: "Variants", context: "Condition", status: "ExperimentStatusType"):
+    experiment_type: "ExperimentType"
+    """
+    Defaulted for backward compatibility with payloads predating RELEASE.
+    """
+
+    def __init__(self, *, id: "str", traffic_percentage: "int", variants: "Variants", context: "Condition", status: "ExperimentStatusType", experiment_type: "ExperimentType"):
         self.id = id
         self.traffic_percentage = traffic_percentage
         self.variants = variants
         self.context = context
         self.status = status
+        self.experiment_type = experiment_type
 
     def __str__(self):
-        return "FfiExperiment(id={}, traffic_percentage={}, variants={}, context={}, status={})".format(self.id, self.traffic_percentage, self.variants, self.context, self.status)
+        return "FfiExperiment(id={}, traffic_percentage={}, variants={}, context={}, status={}, experiment_type={})".format(self.id, self.traffic_percentage, self.variants, self.context, self.status, self.experiment_type)
 
     def __eq__(self, other):
         if self.id != other.id:
@@ -1231,6 +1240,8 @@ class FfiExperiment:
             return False
         if self.status != other.status:
             return False
+        if self.experiment_type != other.experiment_type:
+            return False
         return True
 
 class _UniffiConverterTypeFfiExperiment(_UniffiConverterRustBuffer):
@@ -1242,6 +1253,7 @@ class _UniffiConverterTypeFfiExperiment(_UniffiConverterRustBuffer):
             variants=_UniffiConverterTypeVariants.read(buf),
             context=_UniffiConverterTypeCondition.read(buf),
             status=_UniffiConverterTypeExperimentStatusType.read(buf),
+            experiment_type=_UniffiConverterTypeExperimentType.read(buf),
         )
 
     @staticmethod
@@ -1251,6 +1263,7 @@ class _UniffiConverterTypeFfiExperiment(_UniffiConverterRustBuffer):
         _UniffiConverterTypeVariants.check_lower(value.variants)
         _UniffiConverterTypeCondition.check_lower(value.context)
         _UniffiConverterTypeExperimentStatusType.check_lower(value.status)
+        _UniffiConverterTypeExperimentType.check_lower(value.experiment_type)
 
     @staticmethod
     def write(value, buf):
@@ -1259,6 +1272,7 @@ class _UniffiConverterTypeFfiExperiment(_UniffiConverterRustBuffer):
         _UniffiConverterTypeVariants.write(value.variants, buf)
         _UniffiConverterTypeCondition.write(value.context, buf)
         _UniffiConverterTypeExperimentStatusType.write(value.status, buf)
+        _UniffiConverterTypeExperimentType.write(value.experiment_type, buf)
 
 
 class FfiExperimentGroup:
@@ -1948,6 +1962,8 @@ class _UniffiConverterTypeProviderCache:
 # External type Variant: `from .superposition_types import Variant`
 
 # External type ExperimentStatusType: `from .superposition_types import ExperimentStatusType`
+
+# External type ExperimentType: `from .superposition_types import ExperimentType`
 
 # External type GroupType: `from .superposition_types import GroupType`
 

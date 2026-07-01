@@ -8966,7 +8966,8 @@
                 "type": "string",
                 "enum": [
                     "DEFAULT",
-                    "DELETE_OVERRIDES"
+                    "DELETE_OVERRIDES",
+                    "RELEASE"
                 ]
             },
             "FunctionExecutionRequest": {

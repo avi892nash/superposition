@@ -139,6 +139,22 @@ pub enum ExperimentType {
     #[default]
     Default,
     DeleteOverrides,
+    Release,
+}
+
+impl ExperimentType {
+    /// Total % of traffic this experiment captures across all its variants
+    /// (this is what gets stored as the group's `traffic_percentage`).
+    /// `Release`: control fills the remainder → always 100.
+    /// Others: `traffic_percentage * variants` (the rest falls through to base).
+    pub fn total_traffic_percentage(&self, traffic_percentage: u8, variants_len: usize) -> u8 {
+        match self {
+            ExperimentType::Release => 100,
+            ExperimentType::Default | ExperimentType::DeleteOverrides => {
+                (traffic_percentage as usize * variants_len).min(100) as u8
+            }
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, Default, Deref, DerefMut)]

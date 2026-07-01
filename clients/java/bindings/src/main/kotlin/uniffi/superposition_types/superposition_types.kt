@@ -1393,7 +1393,8 @@ public object FfiConverterTypeExperimentStatusType: FfiConverterRustBuffer<Exper
 enum class ExperimentType {
     
     DEFAULT,
-    DELETE_OVERRIDES;
+    DELETE_OVERRIDES,
+    RELEASE;
     companion object
 }
 

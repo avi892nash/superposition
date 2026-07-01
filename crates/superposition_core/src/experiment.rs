@@ -4,8 +4,8 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use superposition_types::database::models::experimentation::{
-    Bucket, Buckets, Experiment, ExperimentGroup, ExperimentStatusType, GroupType,
-    Variant, Variants,
+    Bucket, Buckets, Experiment, ExperimentGroup, ExperimentStatusType, ExperimentType,
+    GroupType, Variant, Variants,
 };
 use superposition_types::experimental::{Experimental, ExperimentalVariants};
 use superposition_types::{logic::evaluate_local_cohorts, Condition, DimensionInfo};
@@ -32,6 +32,9 @@ pub struct FfiExperiment {
     pub variants: Variants,
     pub context: Condition,
     pub status: ExperimentStatusType,
+    /// Defaulted for backward compatibility with payloads predating RELEASE.
+    #[serde(default)]
+    pub experiment_type: ExperimentType,
 }
 
 impl Experimental for FfiExperiment {
@@ -54,6 +57,7 @@ impl From<Experiment> for FfiExperiment {
             variants: experiment.variants,
             context: experiment.context,
             status: experiment.status,
+            experiment_type: experiment.experiment_type,
         }
     }
 }
@@ -192,7 +196,11 @@ pub fn get_applicable_variants_from_group_response(
                 let valid_context = superposition_types::apply(&exp.context, context);
 
                 let res = valid_context
-                    && (exp.traffic_percentage as usize * exp.variants.len()) >= *toss;
+                    && (exp.experiment_type.total_traffic_percentage(
+                        exp.traffic_percentage,
+                        exp.variants.len(),
+                    ) as usize)
+                        >= *toss;
 
                 res.then_some(bucket.variant_id.clone())
             })
@@ -239,4 +247,73 @@ pub fn filter_experiments_by_context(
     }
 
     experiments
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use superposition_types::database::models::experimentation::VariantType;
+    use superposition_types::{Exp, Overrides};
+
+    fn variant(id: &str, variant_type: VariantType) -> Variant {
+        let overrides =
+            Map::from_iter([("key".to_string(), Value::String(id.to_string()))]);
+        Variant {
+            id: id.to_string(),
+            variant_type,
+            context_id: None,
+            override_id: None,
+            overrides: Exp::<Overrides>::try_from(overrides).unwrap(),
+        }
+    }
+
+    fn experiment(experiment_type: ExperimentType, traffic: u8) -> FfiExperiment {
+        FfiExperiment {
+            id: "exp1".to_string(),
+            traffic_percentage: traffic,
+            variants: Variants::new(vec![
+                variant("exp1-control", VariantType::CONTROL),
+                variant("exp1-experimental-1", VariantType::EXPERIMENTAL),
+            ]),
+            context: Exp::<Condition>::try_from(Map::new()).unwrap().into_inner(),
+            status: ExperimentStatusType::INPROGRESS,
+            experiment_type,
+        }
+    }
+
+    // Resolve the variant a single bucket at `toss` maps to through the gate.
+    fn resolve(exp: &FfiExperiment, toss: usize, variant_id: &str) -> Vec<String> {
+        let experiments =
+            HashMap::from([(exp.id.clone(), exp.clone())]);
+        let buckets = vec![(
+            toss,
+            Bucket {
+                variant_id: variant_id.to_string(),
+                experiment_id: exp.id.clone(),
+            },
+        )];
+        get_applicable_variants_from_group_response(&experiments, &Map::new(), &buckets)
+    }
+
+    #[test]
+    fn release_serves_buckets_above_old_cap() {
+        // RELEASE @ 40%: control absorbs the remainder, so ALL 100 buckets serve.
+        // A high toss (90) that the old `traffic * variants` (= 80) gate wrongly
+        // dropped — leaking to base config — must now resolve to its variant.
+        let exp = experiment(ExperimentType::Release, 40);
+        assert_eq!(resolve(&exp, 90, "exp1-control"), vec!["exp1-control"]);
+        assert_eq!(resolve(&exp, 99, "exp1-control"), vec!["exp1-control"]);
+    }
+
+    #[test]
+    fn default_still_gates_above_coverage() {
+        // DEFAULT @ 40% x 2 variants covers 80 buckets; toss 90 falls through,
+        // toss 70 resolves. (Unchanged behaviour — guards against over-correction.)
+        let exp = experiment(ExperimentType::Default, 40);
+        assert!(resolve(&exp, 90, "exp1-experimental-1").is_empty());
+        assert_eq!(
+            resolve(&exp, 70, "exp1-experimental-1"),
+            vec!["exp1-experimental-1"]
+        );
+    }
 }

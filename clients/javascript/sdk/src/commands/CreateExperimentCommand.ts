@@ -46,7 +46,7 @@ export interface CreateExperimentCommandOutput extends ExperimentResponse, __Met
  *   workspace_id: "STRING_VALUE", // required
  *   org_id: "STRING_VALUE", // required
  *   name: "STRING_VALUE", // required
- *   experiment_type: "DEFAULT" || "DELETE_OVERRIDES",
+ *   experiment_type: "DEFAULT" || "DELETE_OVERRIDES" || "RELEASE",
  *   context: { // Condition // required
  *     "<keys>": "DOCUMENT_VALUE",
  *   },
@@ -76,7 +76,7 @@ export interface CreateExperimentCommandOutput extends ExperimentResponse, __Met
  * //   created_by: "STRING_VALUE", // required
  * //   last_modified: new Date("TIMESTAMP"), // required
  * //   name: "STRING_VALUE", // required
- * //   experiment_type: "DEFAULT" || "DELETE_OVERRIDES", // required
+ * //   experiment_type: "DEFAULT" || "DELETE_OVERRIDES" || "RELEASE", // required
  * //   override_keys: [ // ListOverrideKeys // required
  * //     "STRING_VALUE",
  * //   ],

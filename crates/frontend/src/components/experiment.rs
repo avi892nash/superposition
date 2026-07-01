@@ -4,7 +4,7 @@ use leptos::*;
 use serde_json::{Map, Value};
 use superposition_types::api::experiments::ExperimentResponse;
 use superposition_types::database::models::experimentation::{
-    ExperimentStatusType, Variant, VariantType,
+    ExperimentStatusType, ExperimentType, Variant, VariantType,
 };
 
 use crate::components::datetime::Datetime;
@@ -60,7 +60,33 @@ fn ExperimentInfo(experiment: StoredValue<ExperimentResponse>) -> impl IntoView 
                 <div class="h-fit w-[300px]">
                     <div class="stat-title">Traffic</div>
                     <div class="stat-value text-sm">
-                        {experiment.with_value(|v| *v.traffic_percentage).to_string() + "%"}
+                        {experiment
+                            .with_value(|v| {
+                                let x = *v.traffic_percentage;
+                                if v.experiment_type == ExperimentType::Release {
+                                    let experimental = v
+                                        .variants
+                                        .iter()
+                                        .filter(|var| var.variant_type == VariantType::EXPERIMENTAL)
+                                        .count()
+                                        .max(1);
+                                    view! {
+                                        <div class="flex flex-col leading-snug">
+                                            <span>{format!("{x}% rollout")}</span>
+                                            <span class="text-xs text-gray-500 font-normal whitespace-normal break-words">
+                                                {format!(
+                                                    "control {}% · each variant {}%",
+                                                    100u8.saturating_sub(x),
+                                                    x / experimental as u8,
+                                                )}
+                                            </span>
+                                        </div>
+                                    }
+                                        .into_view()
+                                } else {
+                                    view! { <span>{format!("{x}%")}</span> }.into_view()
+                                }
+                            })}
                     </div>
                 </div>
                 {experiment
@@ -134,9 +160,18 @@ fn ExperimentInfo(experiment: StoredValue<ExperimentResponse>) -> impl IntoView 
                 <div class="h-fit w-[300px]">
                     <div class="stat-title">Experiment Type</div>
                     <div class="stat-value text-sm">
-                        <span class="badge badge-neutral">
-                            {experiment.with_value(|v| v.experiment_type.to_string())}
-                        </span>
+                        {experiment
+                            .with_value(|v| {
+                                let ty = v.experiment_type.to_string();
+                                let color = match v.experiment_type {
+                                    ExperimentType::Release => {
+                                        "bg-purple-600 text-white border-none"
+                                    }
+                                    ExperimentType::DeleteOverrides => "badge-error",
+                                    ExperimentType::Default => "badge-neutral",
+                                };
+                                view! { <span class=format!("badge {color}")>{ty}</span> }
+                            })}
                     </div>
                 </div>
             </div>

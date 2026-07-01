@@ -3,7 +3,10 @@ pub mod utils;
 use std::rc::Rc;
 
 use leptos::{logging::log, *};
-use superposition_types::api::experiments::ExperimentResponse;
+use superposition_types::{
+    api::experiments::ExperimentResponse,
+    database::models::experimentation::{ExperimentType, VariantType},
+};
 use web_sys::MouseEvent;
 
 use self::utils::ramp_experiment;
@@ -25,7 +28,21 @@ where
     let workspace = use_context::<Signal<Workspace>>().unwrap();
     let org = use_context::<Signal<OrganisationId>>().unwrap();
     let (req_inprogess_rs, req_inprogress_ws) = create_signal(false);
-    let range_max = 100 / experiment.variants.len();
+    // RELEASE experiments split a dynamic X% across the experimental variants
+    // (control absorbs the remainder), so the slider is unconstrained by the
+    // `100/N` per-variant cap used by DEFAULT experiments.
+    let is_release = experiment.experiment_type == ExperimentType::Release;
+    let experimental_count = experiment
+        .variants
+        .iter()
+        .filter(|v| v.variant_type == VariantType::EXPERIMENTAL)
+        .count()
+        .max(1);
+    let range_max = if is_release {
+        100
+    } else {
+        100 / experiment.variants.len()
+    };
     let experiment_rc = Rc::new(experiment);
     let handle_ramp_experiment = move |event: MouseEvent| {
         req_inprogress_ws.set(true);
@@ -77,6 +94,21 @@ where
                     set_traffic.set(traffic_value);
                 }
             />
+
+            <Show when=move || is_release>
+                <p class="text-sm text-gray-500 py-2">
+                    {move || {
+                        let x = traffic.get();
+                        let per_experimental = x / experimental_count as u8;
+                        format!(
+                            "Release split: control {}% · each experimental variant {}% ({} experimental)",
+                            100u8.saturating_sub(x),
+                            per_experimental,
+                            experimental_count,
+                        )
+                    }}
+                </p>
+            </Show>
 
             {move || {
                 let loading = req_inprogess_rs.get();

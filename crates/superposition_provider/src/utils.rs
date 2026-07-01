@@ -7,11 +7,13 @@ use superposition_core::experiment::{
 };
 use superposition_core::{Experiments, FfiExperiment};
 use superposition_sdk::types::{
-    ExperimentStatusType as SDKExperimentStatusType, GroupType as SdkGroupType,
+    ExperimentStatusType as SDKExperimentStatusType,
+    ExperimentType as SDKExperimentType, GroupType as SdkGroupType,
 };
 use superposition_types::database::models::cac::{DependencyGraph, DimensionType};
 use superposition_types::database::models::experimentation::{
-    Bucket, Buckets, ExperimentStatusType, GroupType, Variant, VariantType, Variants,
+    Bucket, Buckets, ExperimentStatusType, ExperimentType, GroupType, Variant,
+    VariantType, Variants,
 };
 use superposition_types::{
     Cac, Condition, Config, Context, DimensionInfo, Exp, ExtendedMap, OverrideWithKeys,
@@ -369,12 +371,23 @@ impl ConversionUtils {
                     ))
                 }
             };
+            let experiment_type = match exp.experiment_type {
+                SDKExperimentType::Default => ExperimentType::Default,
+                SDKExperimentType::DeleteOverrides => ExperimentType::DeleteOverrides,
+                SDKExperimentType::Release => ExperimentType::Release,
+                _ => {
+                    return Err(SuperpositionError::SerializationError(
+                        "Unknown experiment type".to_string(),
+                    ))
+                }
+            };
             let experiment = FfiExperiment {
                 id: exp.id,
                 context,
                 variants,
                 traffic_percentage: exp.traffic_percentage as u8,
                 status,
+                experiment_type,
             };
 
             trimmed_exp_list.push(experiment);

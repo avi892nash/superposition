@@ -647,6 +647,8 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
+ALTER TYPE public.experiment_type ADD VALUE IF NOT EXISTS 'RELEASE';
+
 ALTER TABLE {replaceme}.experiments ADD COLUMN IF NOT EXISTS experiment_type public.experiment_type NOT NULL DEFAULT 'DEFAULT';
 
 CREATE TABLE IF NOT EXISTS {replaceme}.experiment_groups(

@@ -1355,6 +1355,8 @@ class ExperimentType(enum.Enum):
     
     DELETE_OVERRIDES = 1
     
+    RELEASE = 2
+    
 
 
 class _UniffiConverterTypeExperimentType(_UniffiConverterRustBuffer):
@@ -1365,6 +1367,8 @@ class _UniffiConverterTypeExperimentType(_UniffiConverterRustBuffer):
             return ExperimentType.DEFAULT
         if variant == 2:
             return ExperimentType.DELETE_OVERRIDES
+        if variant == 3:
+            return ExperimentType.RELEASE
         raise InternalError("Raw enum value doesn't match any cases")
 
     @staticmethod
@@ -1372,6 +1376,8 @@ class _UniffiConverterTypeExperimentType(_UniffiConverterRustBuffer):
         if value == ExperimentType.DEFAULT:
             return
         if value == ExperimentType.DELETE_OVERRIDES:
+            return
+        if value == ExperimentType.RELEASE:
             return
         raise ValueError(value)
 
@@ -1381,6 +1387,8 @@ class _UniffiConverterTypeExperimentType(_UniffiConverterRustBuffer):
             buf.write_i32(1)
         if value == ExperimentType.DELETE_OVERRIDES:
             buf.write_i32(2)
+        if value == ExperimentType.RELEASE:
+            buf.write_i32(3)
 
 
 

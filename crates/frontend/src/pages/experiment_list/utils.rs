@@ -103,6 +103,25 @@ pub fn experiment_table_columns(
             default_column_formatter,
         ),
         Column::default_with_cell_formatter(
+            "experiment_type".to_string(),
+            |value: &str, _| {
+                let (badge_color, icon) = match value {
+                    "RELEASE" => ("bg-purple-600 text-white border-none", "ri-rocket-2-line"),
+                    "DELETE_OVERRIDES" => ("badge-error", "ri-delete-bin-line"),
+                    // DEFAULT and anything else
+                    _ => ("badge-ghost", "ri-flask-line"),
+                };
+                let class = format!("badge gap-1 {}", badge_color);
+                view! {
+                    <div class=class>
+                        <i class=icon></i>
+                        <span class="font-semibold text-xs">{value.to_string()}</span>
+                    </div>
+                }
+                .into_view()
+            },
+        ),
+        Column::default_with_cell_formatter(
             "status".to_string(),
             |value: &str, row: &Map<String, Value>| {
                 let badge_color = match value {

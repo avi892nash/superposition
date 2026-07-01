@@ -1469,6 +1469,15 @@ EXPERIMENT_TYPE = Schema.collection(
             ],
         },
 
+        "RELEASE": {
+            "target": UNIT,
+            "index": 2,
+            "traits": [
+                Trait.new(id=ShapeID("smithy.api#enumValue"), value="RELEASE"),
+
+            ],
+        },
+
     }
 )
 

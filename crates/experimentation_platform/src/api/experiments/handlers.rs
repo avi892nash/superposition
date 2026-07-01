@@ -214,7 +214,7 @@ async fn create_handler(
         .collect::<Vec<Overrides>>();
 
     match req.experiment_type {
-        ExperimentType::Default => {
+        ExperimentType::Default | ExperimentType::Release => {
             let are_valid_variants = check_variants_override_coverage(
                 &variant_overrides,
                 &unique_override_keys,
@@ -577,7 +577,7 @@ pub async fn conclude(
 
         if !experiment.context.is_empty() {
             match (experiment.experiment_type, variant.variant_type) {
-                (ExperimentType::Default, _) => {
+                (ExperimentType::Default | ExperimentType::Release, _) => {
                     let context_move_req = MoveRequest {
                         context: experiment
                             .context
@@ -1408,7 +1408,7 @@ async fn ramp_handler(
     }
 
     match experiment.experiment_type {
-        ExperimentType::Default => {
+        ExperimentType::Default | ExperimentType::Release => {
             // Validate control overrides against resolved config when auto-populate is enabled and experiment is in CREATED state
             if workspace_context.settings.auto_populate_control
                 && experiment.status == ExperimentStatusType::CREATED
@@ -1453,9 +1453,14 @@ async fn ramp_handler(
     let new_traffic_percentage = &req.traffic_percentage;
     let variants_count = experiment.variants.len() as u8;
 
-    new_traffic_percentage
-        .check_max_allowed(variants_count)
-        .map_err(|e| bad_argument!(e))?;
+    // RELEASE experiments split a dynamic X% across the experimental variants
+    // while control absorbs the remainder, so the per-variant `100/N` cap does
+    // not apply — any 0..100 value is valid (already enforced by TrafficPercentage).
+    if experiment.experiment_type != ExperimentType::Release {
+        new_traffic_percentage
+            .check_max_allowed(variants_count)
+            .map_err(|e| bad_argument!(e))?;
+    }
 
     new_traffic_percentage
         .compare_old(&old_traffic_percentage)
@@ -1688,7 +1693,7 @@ async fn update_handler(
             .into_inner();
     let exp_context_id = hash(&Value::Object(experiment_condition.clone().into()));
     match experiment.experiment_type {
-        ExperimentType::Default => {
+        ExperimentType::Default | ExperimentType::Release => {
             let are_valid_variants =
                 check_variants_override_coverage(&variant_overrides, &override_keys);
             if !are_valid_variants {

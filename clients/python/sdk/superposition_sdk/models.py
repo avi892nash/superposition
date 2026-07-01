@@ -2105,6 +2105,7 @@ class ConcludeExperimentInput:
 class ExperimentType(StrEnum):
     DEFAULT = "DEFAULT"
     DELETE_OVERRIDES = "DELETE_OVERRIDES"
+    RELEASE = "RELEASE"
 
 def _serialize_list_override_keys(serializer: ShapeSerializer, schema: Schema, value: list[str]) -> None:
     member_schema = schema.members["member"]

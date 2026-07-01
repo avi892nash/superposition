@@ -49,6 +49,7 @@ fn get_init_state(variants: &[VariantFormT]) -> Vec<(String, VariantFormT)> {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExperimentFormType {
     Default,
+    Release,
     Delete(Option<(String, Map<String, Value>)>),
 }
 
@@ -56,6 +57,7 @@ impl From<ExperimentFormType> for ExperimentType {
     fn from(experiment_form_type: ExperimentFormType) -> Self {
         match experiment_form_type {
             ExperimentFormType::Default => ExperimentType::Default,
+            ExperimentFormType::Release => ExperimentType::Release,
             ExperimentFormType::Delete(_) => ExperimentType::DeleteOverrides,
         }
     }
@@ -65,6 +67,7 @@ impl From<ExperimentType> for ExperimentFormType {
     fn from(experiment_type: ExperimentType) -> Self {
         match experiment_type {
             ExperimentType::Default => ExperimentFormType::Default,
+            ExperimentType::Release => ExperimentFormType::Release,
             ExperimentType::DeleteOverrides => ExperimentFormType::Delete(None),
         }
     }
@@ -306,7 +309,10 @@ pub fn ExperimentForm(
                         context=context_rs.get_untracked()
                         on_context_change=move |new_context| context_ws.set(new_context)
                         disabled=edit_id.get_value().is_some()
-                            || (experiment_form_type.get_value() != ExperimentFormType::Default)
+                            || matches!(
+                                experiment_form_type.get_value(),
+                                ExperimentFormType::Delete(_)
+                            )
                         heading_sub_text=String::from(
                             "Define rules under which this experiment would run",
                         )
@@ -318,7 +324,7 @@ pub fn ExperimentForm(
             {move || {
                 let variants = variants_rs.get();
                 match experiment_form_type.get_value() {
-                    ExperimentFormType::Default => {
+                    ExperimentFormType::Default | ExperimentFormType::Release => {
                         view! {
                             <VariantForm
                                 edit=edit_id.get_value().is_some()

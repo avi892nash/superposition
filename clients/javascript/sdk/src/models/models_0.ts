@@ -630,6 +630,7 @@ export interface ConcludeExperimentInput {
 export const ExperimentType = {
   DEFAULT: "DEFAULT",
   DELETE_OVERRIDES: "DELETE_OVERRIDES",
+  RELEASE: "RELEASE",
 } as const
 /**
  * @public
